@@ -1,0 +1,2 @@
+Para melhorar os eventos(avisos de deprecated)
+Ler mais em: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/esp_event.html?highlight=event
