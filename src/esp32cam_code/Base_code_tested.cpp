@@ -16,6 +16,12 @@
 #include "freertos/queue.h"
 #include "driver/gpio.h"
 
+
+// WARNING!!! PSRAM IC required for UXGA resolution and high JPEG quality
+//            Ensure ESP32 Wrover Module or other board with PSRAM is selected
+//            Partial images will be transmitted if image exceeds buffer size
+
+
 #define CAMERA_MODEL_AI_THINKER // Precisa ser declarado antes de camera_pins
 
 #include "camera_pins.h"
@@ -26,11 +32,11 @@
 #define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT)
 #define ESP_INTR_FLAG_DEFAULT 0 // Verificar necessidade
 
+uint32_t sinal = 0;
+volatile bool trigger = false;
+const char* ssid = "VIVOFIBRA-0E70";
+const char* password = "5246D8B9B9";
 camera_fb_t *fb = NULL;
-
-
-SemaphoreHandle_t xSemaphore_capture;
-SemaphoreHandle_t xSemaphore_send;
 
 esp_err_t _http_event_handler(esp_http_client_event_t *evt)
 {
@@ -145,8 +151,6 @@ void init_cam()
 
 void start_wifi()
 {
-  const char* ssid = "VIVOFIBRA-0E70";
-  const char* password = "5246D8B9B9";
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -157,33 +161,17 @@ void start_wifi()
   Serial.println("WiFi connected");
 }
 
-static void IRAM_ATTR isr(void* arg){
-  //Explicação sobre xHigherPriorityTaskWoken:
-  // https://www.freertos.org/a00124.html 
-  static BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-  xSemaphoreGiveFromISR(xSemaphore_capture, &xHigherPriorityTaskWoken);
-  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+static void IRAM_ATTR capture(void* arg){
+  trigger = true;
 }
 
-void capture(void *paremeter)
-{
-  while(true)
-  {
-    if(xSemaphoreTake(xSemaphore_capture, portMAX_DELAY) == pdTRUE)
-    {
-      fb = esp_camera_fb_get();
-      if (!fb){
-        Serial.println("Camera capture failed");//Remover para os testes.
-      }
-      else{
-        xSemaphoreGive(xSemaphore_send);
-      }
-      esp_camera_fb_return(fb);
+esp_err_t send_img(){
+  Serial.println("Enviando imagem");
+  fb = esp_camera_fb_get();
+  if (!fb){
+      Serial.println("Camera capture failed");
+      return ESP_FAIL;
     }
-  }
-}
-
-void send_img(void *parameter){
   
   char local_response_buffer[MAX_HTTP_OUTPUT_BUFFER] = {0};
   esp_err_t err;
@@ -191,54 +179,55 @@ void send_img(void *parameter){
   config.url = "http://192.168.15.12:5000/api/test";
   config.event_handler = _http_event_handler;
   config.user_data = local_response_buffer;
-  config.method = HTTP_METHOD_POST;
+
   esp_http_client_handle_t client = esp_http_client_init(&config);
+  esp_http_client_set_method(client, HTTP_METHOD_POST);
 
-  while (true)
-  {
-    if(xSemaphoreTake(xSemaphore_send, portMAX_DELAY) == pdTRUE)
-    {
-      //Serial.println("Enviando imagem");
-      esp_http_client_set_header(client, "content-type", "image/jpeg");
-      esp_http_client_set_post_field(client, (const char *)fb->buf, fb->len);
-      err = esp_http_client_perform(client);
-      //Serial.print("Média: ");
-      Serial.println(local_response_buffer);
-      
-    }
+  esp_http_client_set_header(client, "content-type", "image/jpeg");
+  esp_http_client_set_post_field(client, (const char *)fb->buf, fb->len);
 
-  }
+  err = esp_http_client_perform(client);
+  Serial.print("Média: ");
+  Serial.println(local_response_buffer);
+  esp_camera_fb_return(fb);
+
   esp_http_client_cleanup(client);
+  return ESP_OK;
 }
 
 void configure_pins(){
+  //zero-initialize the config structure.
   gpio_config_t io_conf = {};
+  //Configura Entrada pino 15
+  //Com interrupção configurada na borda de subida do pino
+  //interrupt of rising edge
   io_conf.intr_type = GPIO_INTR_POSEDGE;
+  //bit mask of the pins, use GPIO4/5 here
   io_conf.pin_bit_mask = GPIO_INPUT_PIN_SEL;
+  //set as input mode
   io_conf.mode = GPIO_MODE_INPUT;
-  io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
-  io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+  io_conf.pull_down_en = gpio_pulldown_t(1);
   gpio_config(&io_conf);
   //install gpio isr service
   gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
   //hook isr handler for specific gpio pin
-  gpio_isr_handler_add(GPIO_INPUT, isr, (void*)GPIO_INPUT);
-  printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
-
+  gpio_isr_handler_add(GPIO_INPUT, capture, (void*) GPIO_INPUT);
+  //printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
 }
 
 void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(true);
   Serial.println();
-  init_cam(); // Inicializa a câmera
-  start_wifi(); // Iicializa o WIFI
-  configure_pins(); // Configura os pinos para interrupção de captura
-  xSemaphore_capture = xSemaphoreCreateBinary(); // semaforo que libera a captura
-  xSemaphore_send = xSemaphoreCreateBinary(); //Semaforo que libera o envio ao servidor
-  xTaskCreatePinnedToCore(capture, "tarea1", 4096, NULL, 0, NULL, 0);
-  xTaskCreatePinnedToCore(send_img, "tarea1", 4096, NULL, 1, NULL, 1);
+  init_cam();
+  start_wifi();
+  configure_pins();
 }
 
 void loop() {
+  if(trigger==true){
+    send_img();
+    trigger = false;
+  }
+  vTaskDelay(1000/portTICK_RATE_MS);
 }
