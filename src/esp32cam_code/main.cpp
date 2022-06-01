@@ -26,7 +26,7 @@
 #define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT)
 #define ESP_INTR_FLAG_DEFAULT 0 // Verificar necessidade
 
-camera_fb_t *fb = NULL;
+camera_fb_t *img_capture = NULL;
 
 
 SemaphoreHandle_t xSemaphore_capture;
@@ -88,8 +88,7 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
   return ESP_OK;
 }
 
-void init_cam()
-{
+void init_cam(){
     camera_config_t config;
     config.ledc_channel = LEDC_CHANNEL_0;
     config.ledc_timer = LEDC_TIMER_0;
@@ -143,8 +142,7 @@ void init_cam()
   
 }
 
-void start_wifi()
-{
+void start_wifi(){
   const char* ssid = "VIVOFIBRA-0E70";
   const char* password = "5246D8B9B9";
   WiFi.begin(ssid, password);
@@ -167,6 +165,8 @@ static void IRAM_ATTR isr(void* arg){
 
 void capture(void *paremeter)
 {
+  
+  camera_fb_t *fb = NULL;
   while(true)
   {
     if(xSemaphoreTake(xSemaphore_capture, portMAX_DELAY) == pdTRUE)
@@ -176,6 +176,7 @@ void capture(void *paremeter)
         Serial.println("Camera capture failed");//Remover para os testes.
       }
       else{
+        img_capture = fb;
         xSemaphoreGive(xSemaphore_send);
       }
       esp_camera_fb_return(fb);
@@ -200,7 +201,7 @@ void send_img(void *parameter){
     {
       //Serial.println("Enviando imagem");
       esp_http_client_set_header(client, "content-type", "image/jpeg");
-      esp_http_client_set_post_field(client, (const char *)fb->buf, fb->len);
+      esp_http_client_set_post_field(client, (const char *)img_capture->buf, img_capture->len);
       err = esp_http_client_perform(client);
       //Serial.print("Média: ");
       Serial.println(local_response_buffer);
