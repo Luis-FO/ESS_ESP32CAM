@@ -8,7 +8,7 @@
 #define PINS 8
 
 //GPIO_NUM_33 comand capture
-gpio_num_t LEDs [] = {GPIO_NUM_13, GPIO_NUM_12, GPIO_NUM_14, GPIO_NUM_27, GPIO_NUM_26, GPIO_NUM_25, GPIO_NUM_33, GPIO_NUM_4};
+gpio_num_t LEDs [] = {GPIO_NUM_13, GPIO_NUM_12, GPIO_NUM_14, GPIO_NUM_27, GPIO_NUM_26, GPIO_NUM_25, GPIO_NUM_33, GPIO_NUM_34};
 
 //Last bit is the command capture
 int num [11][8] = {{1,1,1,1,1,1,0,0},
