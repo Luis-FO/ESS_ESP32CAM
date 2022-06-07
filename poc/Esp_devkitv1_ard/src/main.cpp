@@ -30,6 +30,8 @@ void configure_pins(){
   {
     io_conf.pin_bit_mask = (1ULL<<LEDs[i]);
     io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;// Work without this
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;// Work without this
     gpio_config(&io_conf);
     gpio_set_level(LEDs[i], 0);
   }
