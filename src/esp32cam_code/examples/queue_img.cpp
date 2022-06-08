@@ -22,18 +22,17 @@
 
 #define MAX_HTTP_OUTPUT_BUFFER 2048
 
-#define GPIO_INPUT GPIO_NUM_15
+#define GPIO_INPUT GPIO_NUM_14
 #define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT)
 #define ESP_INTR_FLAG_DEFAULT 0 // Verificar necessidade
 
 
 SemaphoreHandle_t xSemaphore_capture;
-//SemaphoreHandle_t xSemaphore_send;
 QueueHandle_t buffer;
 
 typedef struct {
-  uint8_t *buf;              /*!< Pointer to the pixel data */
-  size_t len;                 /*!< Length of the buffer in bytes */
+  uint8_t *buf;          
+  size_t len;              
 }img_data;
 
 esp_err_t _http_event_handler(esp_http_client_event_t *evt)
@@ -172,9 +171,11 @@ void capture(void *paremeter)
       fb = esp_camera_fb_get();
       if (!fb){
         Serial.println("Camera capture failed");//Remover para os testes.
+        
       }
       else{
-        img.buf = fb->buf;
+        img.buf = (uint8_t *)malloc(fb->len); 
+        memcpy(img.buf, fb->buf, fb->len);
         img.len = fb->len;
         xQueueSend(buffer, &img, pdMS_TO_TICKS(0));
       }
@@ -237,8 +238,10 @@ void setup() {
   xSemaphore_capture = xSemaphoreCreateBinary(); // semaforo que libera a captura
   //xSemaphore_send = xSemaphoreCreateBinary(); //Semaforo que libera o envio ao servidor
   buffer = xQueueCreate(10, sizeof(img_data));//crea la cola *buffer* con 10 slots de 4 Bytes
-  xTaskCreatePinnedToCore(capture, "tarea1", 4096, NULL, 0, NULL, 0);
-  xTaskCreatePinnedToCore(send_img, "tarea1", 4096, NULL, 1, NULL, 1);
+  // xTaskCreatePinnedToCore(capture, "tarea1", 8192, NULL, 0, NULL, 0);
+  // xTaskCreatePinnedToCore(send_img, "tarea1", 8192, NULL, 1, NULL, 1);
+  xTaskCreate(capture, "captura", 8192, NULL, 2, NULL);
+  xTaskCreate(send_img, "send", 8132, NULL, 4, NULL);
 }
 
 void loop() {
