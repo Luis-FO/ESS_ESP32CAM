@@ -92,6 +92,7 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
 }
 
 void init_cam(){
+    //printf("Cam Init: Running\n");
     camera_config_t config;
     config.ledc_channel = LEDC_CHANNEL_0;
     config.ledc_timer = LEDC_TIMER_0;
@@ -113,43 +114,51 @@ void init_cam(){
     config.pin_reset = RESET_GPIO_NUM;
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
+    config.grab_mode = CAMERA_GRAB_LATEST;
 
     // if PSRAM IC present, init with UXGA resolution and higher JPEG quality
     //                      for larger pre-allocated frame buffer.
  
-    config.frame_size = FRAMESIZE_SVGA;
-    config.jpeg_quality = 12;
-    config.fb_count = 2;
-    
+    if(psramFound()){
+        //printf("PSRAM found\n");
+        config.frame_size = FRAMESIZE_UXGA;
+        config.jpeg_quality = 10;
+        config.fb_count = 2;
+    } else {
+        //printf("PSRAM not found\n");
+        config.frame_size = FRAMESIZE_SVGA;
+        config.jpeg_quality = 12;
+        config.fb_count = 1;
+    }
     // camera init
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
-        Serial.printf("Camera init failed with error 0x%x", err);
+        //Serial.println("Camera init failed with error 0x%x", err);
         return;
     }
 
     sensor_t * s = esp_camera_sensor_get();
     // initial sensors are flipped vertically and colors are a bit saturated
     if (s->id.PID == OV3660_PID) {
-    s->set_vflip(s, 1); // flip it back
-    s->set_brightness(s, 1); // up the brightness just a bit
-    s->set_saturation(s, -2); // lower the saturation
+      s->set_vflip(s, 1); // flip it back
+      s->set_brightness(s, 1); // up the brightness just a bit
+      s->set_saturation(s, -2); // lower the saturation
     }
-
-  
+    s->set_framesize(s, FRAMESIZE_SVGA);
 }
 
 void start_wifi(){
+  //printf("Start WIFI: Running\n");
   const char* ssid = "VIVOFIBRA-0E70";
   const char* password = "5246D8B9B9";
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+    vTaskDelay(pdMS_TO_TICKS(500));
+   //Serial.print(".");
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
+  //Serial.println("");
+  //Serial.println("WiFi connected");
 }
 
 static void IRAM_ATTR isr(void* arg){
@@ -168,16 +177,17 @@ void capture(void *paremeter)
   {
     if(xSemaphoreTake(xSemaphore_capture, portMAX_DELAY) == pdTRUE)
     {
+      //printf("Take");
       fb = esp_camera_fb_get();
       if (!fb){
-        Serial.println("Camera capture failed");//Remover para os testes.
-        
+       //Serial.println("Camera capture failed");//Remover para os testes.
       }
       else{
-        img.buf = (uint8_t *)malloc(fb->len); 
+        img.buf = (uint8_t *)malloc(fb->len);
         memcpy(img.buf, fb->buf, fb->len);
         img.len = fb->len;
-        xQueueSend(buffer, &img, pdMS_TO_TICKS(0));
+        xQueueSendToFront(buffer, &img, pdMS_TO_TICKS(0));
+        free(img.buf);
       }
       esp_camera_fb_return(fb);
     }
@@ -205,7 +215,7 @@ void send_img(void *parameter){
       esp_http_client_set_post_field(client, (const char *)img_send.buf, img_send.len);
       err = esp_http_client_perform(client);
       //Serial.print("Média: ");
-      Serial.println(local_response_buffer);
+      //Serial.println(local_response_buffer);
     }
 
   }
@@ -213,6 +223,7 @@ void send_img(void *parameter){
 }
 
 void configure_pins(){
+  //printf("Pin configuration: Running\n");
   gpio_config_t io_conf = {};
   io_conf.intr_type = GPIO_INTR_POSEDGE;
   io_conf.pin_bit_mask = GPIO_INPUT_PIN_SEL;
@@ -221,27 +232,31 @@ void configure_pins(){
   io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
   gpio_config(&io_conf);
   //install gpio isr service
-  gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
+  gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT); //A proxima linhas dispensa essa
   //hook isr handler for specific gpio pin
   gpio_isr_handler_add(GPIO_INPUT, isr, (void*)GPIO_INPUT);
-  printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
+  //printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
+  gpio_intr_disable(GPIO_INPUT);
+  //printf("Pause ISR for 5s\n");
+  vTaskDelay(pdMS_TO_TICKS(5000));
+  gpio_intr_enable(GPIO_INPUT);
 
 }
 
 void setup() {
-  Serial.begin(115200);
-  Serial.setDebugOutput(true);
-  Serial.println();
+  //Serial.begin(115200);
+  //Serial.setDebugOutput(true);
+  //Serial.println();
   init_cam(); // Inicializa a câmera
   start_wifi(); // Iicializa o WIFI
   configure_pins(); // Configura os pinos para interrupção de captura
   xSemaphore_capture = xSemaphoreCreateBinary(); // semaforo que libera a captura
   //xSemaphore_send = xSemaphoreCreateBinary(); //Semaforo que libera o envio ao servidor
   buffer = xQueueCreate(10, sizeof(img_data));//crea la cola *buffer* con 10 slots de 4 Bytes
-  // xTaskCreatePinnedToCore(capture, "tarea1", 8192, NULL, 0, NULL, 0);
-  // xTaskCreatePinnedToCore(send_img, "tarea1", 8192, NULL, 1, NULL, 1);
-  xTaskCreate(capture, "captura", 8192, NULL, 2, NULL);
-  xTaskCreate(send_img, "send", 8132, NULL, 4, NULL);
+  xTaskCreatePinnedToCore(capture, "capture", 8192, NULL, 0, NULL, 0);
+  xTaskCreatePinnedToCore(send_img, "send", 8192, NULL, 1, NULL, 1);
+  //xTaskCreate(capture, "captura", 8192, NULL, 2, NULL);
+  //xTaskCreate(send_img, "send", 8132, NULL, 4, NULL);
 }
 
 void loop() {
