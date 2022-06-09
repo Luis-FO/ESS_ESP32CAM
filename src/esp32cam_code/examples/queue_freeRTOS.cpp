@@ -240,6 +240,7 @@ void configure_pins(){
   //printf("Pause ISR for 5s\n");
   vTaskDelay(pdMS_TO_TICKS(5000));
   gpio_intr_enable(GPIO_INPUT);
+
 }
 
 void setup() {
