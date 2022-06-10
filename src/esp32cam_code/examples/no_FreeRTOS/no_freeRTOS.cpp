@@ -22,10 +22,9 @@
 #include "camera_pins.h"
 
 #define MAX_HTTP_OUTPUT_BUFFER 2048
-#define GPIO_INPUT GPIO_NUM_15
+#define GPIO_INPUT GPIO_NUM_14
 #define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT)
 #define ESP_INTR_FLAG_DEFAULT 0 // Verificar necessidade
-
 
 char local_response_buffer[MAX_HTTP_OUTPUT_BUFFER] = {0};
 volatile bool trigger = false;
@@ -110,6 +109,7 @@ void init_cam(){
     config.pin_reset = RESET_GPIO_NUM;
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
+    config.grab_mode = CAMERA_GRAB_LATEST;
 
     // if PSRAM IC present, init with UXGA resolution and higher JPEG quality
     //                      for larger pre-allocated frame buffer.
@@ -126,7 +126,7 @@ void init_cam(){
     // camera init
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
-        Serial.printf("Camera init failed with error 0x%x", err);
+        //Serial.printf("Camera init failed with error 0x%x", err);
         return;
     }
 
@@ -148,11 +148,11 @@ void start_wifi(){
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+    vTaskDelay(pdMS_TO_TICKS(500));
+    //Serial.print(".");
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
+  //Serial.println("");
+  //Serial.println("WiFi connected");
 }
 
 static void IRAM_ATTR isr(void* arg){
@@ -163,7 +163,7 @@ void capture()
 {
   fb = esp_camera_fb_get();
   if (!fb){
-    Serial.println("Camera capture failed");//Remover para os testes. 
+    //Serial.println("Camera capture failed");//Remover para os testes. 
   }
   else{
     send_img();
@@ -187,7 +187,7 @@ void send_img(){
   esp_err_t err;
   esp_http_client_set_post_field(client, (const char *)fb->buf, fb->len);
   err = esp_http_client_perform(client);
-  Serial.println(local_response_buffer);     
+  //Serial.println(local_response_buffer);     
 }
 
 void configure_pins(){
@@ -202,14 +202,18 @@ void configure_pins(){
   gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
   //hook isr handler for specific gpio pin
   gpio_isr_handler_add(GPIO_INPUT, isr, (void*)GPIO_INPUT);
-  printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
+  //printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
+  gpio_intr_disable(GPIO_INPUT);
+  //printf("Pause ISR for 5s\n");
+  vTaskDelay(pdMS_TO_TICKS(5000));
+  gpio_intr_enable(GPIO_INPUT);
 
 }
 
 void setup() {
-  Serial.begin(115200);
-  Serial.setDebugOutput(true);
-  Serial.println();
+  // Serial.begin(115200);
+  // Serial.setDebugOutput(true);
+  // Serial.println();
   init_cam(); // Inicializa a câmera
   start_wifi(); // Iicializa o WIFI
   configure_pins(); // Configura os pinos para interrupção de captura
