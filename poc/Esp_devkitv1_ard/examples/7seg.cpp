@@ -57,10 +57,10 @@ void loop() {
   {
     for(int j = 0;j<11;j++)
     {
-      set_number(j);
       vTaskDelay(pdMS_TO_TICKS(times[i]));
+      set_number(j);
     }
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    vTaskDelay(pdMS_TO_TICKS(2000));
   }
   
   
