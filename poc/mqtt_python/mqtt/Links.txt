@@ -1,0 +1,7 @@
+https://medium.com/python-point/mqtt-basics-with-python-examples-7c758e605d4 -> introdução
+
+https://pypi.org/project/paho-mqtt/ -> paho mqtt
+
+https://www.emqx.io/mqtt/public-mqtt5-broker -> SITE broker gratuito
+
+broker.emqx.io -> BROKER
