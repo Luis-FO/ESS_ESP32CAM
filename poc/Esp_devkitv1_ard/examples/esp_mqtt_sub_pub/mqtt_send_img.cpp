@@ -22,20 +22,26 @@
 
 #include "esp_log.h"
 #include "mqtt_client.h"
+#include "commom.h"
 
 SemaphoreHandle_t take_picture;
 QueueHandle_t buffer;
+esp_timer_handle_t esp_timer_handle; //handler
 
-typedef struct {
-  uint8_t *buf;          
-  size_t len;              
-}img_data;
 
 uint8_t contagem = 0;
 
+
+static void log_error_if_nonzero(const char *message, int error_code)
+{
+    if (error_code != 0) {
+        printf("Last error %s: 0x%x\n", message, error_code);
+    }
+}
+
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
-    printf("Event dispatched from event loop base=%s, event_id=%d\n", base, event_id);
+    //printf("Event dispatched from event loop base=%s, event_id=%d\n", base, event_id);
     esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
@@ -43,16 +49,31 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
     case MQTT_EVENT_CONNECTED:
         printf("MQTT_EVENT_CONNECTED\n");
-        // msg_id = esp_mqtt_client_subscribe(client, "/topic/temperatura", 0);
-        // printf("sent subscribe successful, msg_id=%d\n", msg_id);
+        msg_id = esp_mqtt_client_subscribe(client, "topic/resp", 1);
+        printf("sent subscribe successful, msg_id=%d\n", msg_id);
+        timer_start();
         break;
 
     case MQTT_EVENT_DISCONNECTED:
         printf("MQTT_EVENT_DISCONNECTED\n");
+        timer_stop();
+        break;
+
+    case MQTT_EVENT_DATA:
+        printf("MQTT_EVENT_DATA\n");
+        printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
+        printf("DATA=%.*s\r\n", event->data_len, event->data);
         break;
 
     case MQTT_EVENT_ERROR:
         printf("MQTT_EVENT_ERROR\n");
+        if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
+            log_error_if_nonzero("reported from esp-tls", event->error_handle->esp_tls_last_esp_err);
+            log_error_if_nonzero("reported from tls stack", event->error_handle->esp_tls_stack_err);
+            log_error_if_nonzero("captured as transport's socket errno",  event->error_handle->esp_transport_sock_errno);
+            printf("Last errno string (%s)\n", strerror(event->error_handle->esp_transport_sock_errno));
+            printf("Other event id:%d\n", event->event_id);
+        }
         break;
 
     default:
@@ -62,16 +83,18 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 esp_mqtt_client_handle_t mqtt_app_start(void)
 {
-    
     esp_mqtt_client_config_t mqtt_cfg = {
-        .uri = "mqtt://mqtt.eclipseprojects.io",
+        .uri = "mqtt://192.168.15.12",
+        .port = 1883,
+        .username = "luis",
+        .password = "DMK178qtS"
     };
-
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     /* The last argument may be used to pass data to the event handler, in this example mqtt_event_handler */
     esp_mqtt_client_register_event(client, MQTT_EVENT_ERROR, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(client, MQTT_EVENT_DISCONNECTED, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(client, MQTT_EVENT_CONNECTED, mqtt_event_handler, NULL);
+    esp_mqtt_client_register_event(client, MQTT_EVENT_DATA, mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
     return client;
 }
@@ -92,7 +115,23 @@ void timer_callback(void *args)
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-void capture(void *args){ 
+void timer_start()
+{
+    //Função trigger para simular sinal de entrada
+    const esp_timer_create_args_t esp_timer_create_args = {
+        .callback = timer_callback,
+        .name = "My timer"};
+    esp_timer_create(&esp_timer_create_args, &esp_timer_handle);
+    esp_timer_start_periodic(esp_timer_handle, 2000000);
+}
+
+void timer_stop()
+{
+    esp_timer_stop(esp_timer_handle);
+    esp_timer_delete(esp_timer_handle);
+}
+
+void capture(void *args){
     img_data *fb = NULL;
     img_data img;
     while(true)
@@ -116,16 +155,19 @@ void capture(void *args){
 }
 
 void send(void *args)
-{   
-  img_data img_send;
+{  
+  //esp_mqtt_client_handle_t client = (esp_mqtt_client_handle_t)args;
   esp_mqtt_client_handle_t client = mqtt_app_start();
+  img_data img_send;
   int msg_id; 
   while (true)
   {
     if(xQueueReceive(buffer, &img_send, portMAX_DELAY) == pdTRUE)
     {
-        //Publica a imagem no broker
-        msg_id = esp_mqtt_client_publish(client, "/topic/imagem", (const char *)img_send.buf, img_send.len, 1, 0);
+        {
+            //Publica a imagem no broker
+            msg_id = esp_mqtt_client_publish(client, "topic/img", (const char *)img_send.buf, img_send.len, 1, 0);
+        }
     }
 
   }
@@ -150,20 +192,9 @@ void setup(void)
     Serial.begin(115200);
     start_wifi();
     take_picture = xSemaphoreCreateBinary();
-    //Função trigger para simular sinal de entrada
-    const esp_timer_create_args_t esp_timer_create_args = {
-        .callback = timer_callback,
-        .name = "My timer"};
-
-    esp_timer_handle_t esp_timer_handle; //handler
-    esp_timer_create(&esp_timer_create_args, &esp_timer_handle);
-
     buffer = xQueueCreate(10, sizeof(img_data));//crea la cola *buffer* con 10 slots de 4 Bytes
-    mqtt_app_start();
-    xTaskCreatePinnedToCore(capture, "capture", 8192, NULL, 0, NULL, 0);
-
-    xTaskCreatePinnedToCore(send, "send", 8192, NULL, 1, NULL, 1);
-    esp_timer_start_periodic(esp_timer_handle, 1000000);
+    xTaskCreatePinnedToCore(capture, "capture", 8192, NULL, 2, NULL, 0);
+    xTaskCreatePinnedToCore(send, "send", 8192, NULL, 4, NULL, 1);
 }
 
 void loop()
