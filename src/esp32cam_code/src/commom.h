@@ -76,7 +76,12 @@ typedef struct {
 static void log_error_if_nonzero(const char *message, int error_code);
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 esp_mqtt_client_handle_t mqtt_app_start(void);
-
+static void IRAM_ATTR isr(void* args);
 void capture(void *args);
 void send(void *args);
-void start_wifi();
+static void start_wifi();
+static void configure_pins();
+static void init_cam();
+
+
+

@@ -1,18 +1,21 @@
+import os
+
 import paho.mqtt.client as mqtt
+import cv2
+import numpy as np
+from multiprocessing import Value
+
+counter = Value('i', 0)
 
 class mqtt_sub(mqtt.Client):
-
-    def on_connect(self, mqttc, obj, flags, rc):
-        print("rc: "+str(rc))
-
-    def on_connect_fail(self, mqttc, obj):
-        print("Connect failed")
-
+        
     def on_message(self, mqttc, obj, msg):
         """"Recebe e processa os dados"""
         #paridade = verify(msg.payload)
-        print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
-        self.publish("topic/resp", "recebido", 1)
+        #print("aqui")
+        #print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
+        _ , response = self.convert_to_array(msg.payload)
+        self.publish("topic/resp", response, 1)
 
     def on_publish(self, mqttc, obj, mid):
         print("mid: "+str(mid))
@@ -32,14 +35,37 @@ class mqtt_sub(mqtt.Client):
         """
         self.connect("192.168.15.12", 1883, 60)
         self.subscribe("topic/img", 1)# mover para def on_connect e verificar se funciona igual
-
         rc = 0
         while rc == 0:
             rc = self.loop_forever()
         #print('s')
         return rc
 
+    def convert_to_array(self, data):
+        nparr = np.frombuffer(data, np.uint8)
+        # Decodifica a imagem e converte para grayscale
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        return img, processing(img)
+
+
+def processing(img):
+    img_dir = r"C:\Users\LuisF\Desktop\TCC\Sincronia_FreeRTOS_mqtt"
+    if not os.path.isdir(img_dir):
+        os.mkdir(img_dir)
+    counter.value += 1
+    count = counter.value       
+    cv2.imwrite(os.path.join(img_dir,"img_"+str(count)+".jpeg"), img)
+    # ax.imshow(img)
+    # plt.show()
+    # Armazena a média de intensidades da imagem recebida
+    mean = np.mean(img)
+    # Insere a média em uma string
+    response = f'{mean}'
+    return response
+
+
 def verify(num):
+    """test function just for receiving integer number"""
     if num%2 == 0:
         return "Par"
     else:
@@ -47,7 +73,7 @@ def verify(num):
 
 
 if __name__ == "__main__":
-    
+
     mqttc = mqtt_sub()
     mqttc.username_pw_set(username="luis", password="DMK178qtS")
     rc = mqttc.run()

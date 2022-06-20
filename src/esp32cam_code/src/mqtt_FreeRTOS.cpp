@@ -7,11 +7,6 @@
 SemaphoreHandle_t xSemaphore_capture;
 QueueHandle_t buffer;
 
-typedef struct {
-  uint8_t *buf;          
-  size_t len;              
-}img_data;
-
 static void log_error_if_nonzero(const char *message, int error_code)
 {
     if (error_code != 0) {
@@ -67,7 +62,8 @@ esp_mqtt_client_handle_t mqtt_app_start(void)
         .uri = "mqtt://192.168.15.12",
         .port = 1883,
         .username = "luis",
-        .password = "DMK178qtS"
+        .password = "DMK178qtS",
+        .out_buffer_size = 100000//verificar necessidade
     };
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     /* The last argument may be used to pass data to the event handler, in this example mqtt_event_handler */
@@ -124,6 +120,7 @@ void send(void *args)
         {
             //Publica a imagem no broker
             msg_id = esp_mqtt_client_publish(client, "topic/img", (const char *)img_send.buf, img_send.len, 1, 0);
+            //esp_mqtt_client_enqueue() versão não bloqueante
         }
     }
   }
@@ -214,7 +211,7 @@ static void init_cam(){
       s->set_saturation(s, -2); // lower the saturation
     }
     s->set_framesize(s, FRAMESIZE_SVGA);
-    free(s);
+    //free(s) -> verificar se isto causava algum tipo de erro
 }
 
 void setup(void)
