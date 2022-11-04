@@ -1,0 +1,5 @@
+Why 20MHz less framerate than 10MHz ?
+
+Because allows for another internal multiplier to be turned on. 
+
+I am hunting clock settings on the supported sensors even now. I am setting up OV5640 for example to work at "full" FPS at 20MHz XCLK and lower the FPS (and increase exposure time as result) with lower frequencies (tried 5-20 and it's awesome). OV2640 is quite different sensor and clock structure, so not sure how good I can do there.
