@@ -6,21 +6,25 @@
 #include "sdkconfig.h"
 
 #define PINS 8
+#define CICLOS 10
+
+#define QTD_DIG 10 //(0-9)
+#define QTD_CAPT (QTD_DIG*CICLOS)
 
 //GPIO_NUM_33 comand capture
 gpio_num_t LEDs [] = {GPIO_NUM_13, GPIO_NUM_12, GPIO_NUM_14, GPIO_NUM_27, GPIO_NUM_26, GPIO_NUM_25, GPIO_NUM_33, GPIO_NUM_2};
 
 //Last bit is the command capture
 int num [11][8] = {{1,1,1,1,1,1,0,0},
-                   {0,1,1,0,0,0,0,0},
+                   {0,1,1,0,0,0,0,1},
                    {1,1,0,1,1,0,1,0},
-                   {1,1,1,1,0,0,1,0},
+                   {1,1,1,1,0,0,1,1},
                    {0,1,1,0,0,1,1,0},
-                   {1,0,1,1,0,1,1,0},
+                   {1,0,1,1,0,1,1,1},
                    {1,0,1,1,1,1,1,0},
                    {1,1,1,0,0,0,0,1},
                    {1,1,1,1,1,1,1,0},
-                   {1,1,1,1,0,1,1,0},
+                   {1,1,1,1,0,1,1,1},
                    {0,0,0,0,0,0,0,0}
                   };
 
@@ -48,20 +52,28 @@ void set_number(int pos)
 
 void setup() {
   configure_pins();
+  vTaskDelay(pdMS_TO_TICKS(5000));
 }
 
+/*Novo teste:
+Para cada delay serão executados x ciclos de contagem completos (0-9)
+Aqui todos os dígitos serão capturados.
+*/
 void loop() {
-  int times[] = {2000, 1500, 1000, 500, 200, 100, 50, 10, 1};
+  
+  int times[] = {500, 200, 100, 50, 10, 1};
+  int len_times = sizeof(times)/sizeof(int);
+  int num = 0;
 
-  for(int i = 0; i<9;i++)
+  for(int i = 0; i<len_times;i++)
   {
-    for(int j = 0;j<11;j++)
+    for(int j = 0;j<QTD_CAPT;j++)
     {
       vTaskDelay(pdMS_TO_TICKS(times[i]));
-      set_number(j);
+      num = j%QTD_DIG; // Operação resto para obter sempre um número entre 0 e 9
+      set_number(num);
     }
     vTaskDelay(pdMS_TO_TICKS(2000));
   }
-  
   
 }
