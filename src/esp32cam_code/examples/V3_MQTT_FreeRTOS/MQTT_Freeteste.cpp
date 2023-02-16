@@ -7,13 +7,6 @@
 SemaphoreHandle_t xSemaphore_capture;
 QueueHandle_t buffer;
 
-static void log_error_if_nonzero(const char *message, int error_code)
-{
-    if (error_code != 0) {
-        printf("Last error %s: 0x%x\n", message, error_code);
-    }
-}
-
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     //printf("Event dispatched from event loop base=%s, event_id=%d\n", base, event_id);
@@ -23,32 +16,23 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
 
     case MQTT_EVENT_CONNECTED:
-        printf("MQTT_EVENT_CONNECTED\n");
+        //printf("MQTT_EVENT_CONNECTED\n");
         msg_id = esp_mqtt_client_subscribe(client, "topic/resp", 1);
-        printf("sent subscribe successful, msg_id=%d\n", msg_id);
-        gpio_intr_enable(GPIO_INPUT);;
+        //printf("sent subscribe successful, msg_id=%d\n", msg_id);
+        //gpio_intr_enable(GPIO_INPUT);
         break;
 
     case MQTT_EVENT_DISCONNECTED:
-        printf("MQTT_EVENT_DISCONNECTED\n");
-        gpio_intr_disable(GPIO_INPUT);
+        //printf("MQTT_EVENT_DISCONNECTED\n");
+        msg_id = esp_mqtt_client_unsubscribe(client, "topic/resp");
+        //msg_id = esp_mqtt_client_subscribe(client, "topic/resp", 1);
+        //gpio_intr_disable(GPIO_INPUT);
         break;
 
     case MQTT_EVENT_DATA:
-        printf("MQTT_EVENT_DATA\n");
-        printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-        printf("DATA=%.*s\r\n", event->data_len, event->data);
-        break;
-
-    case MQTT_EVENT_ERROR:
-        printf("MQTT_EVENT_ERROR\n");
-        if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
-            log_error_if_nonzero("reported from esp-tls", event->error_handle->esp_tls_last_esp_err);
-            log_error_if_nonzero("reported from tls stack", event->error_handle->esp_tls_stack_err);
-            log_error_if_nonzero("captured as transport's socket errno",  event->error_handle->esp_transport_sock_errno);
-            printf("Last errno string (%s)\n", strerror(event->error_handle->esp_transport_sock_errno));
-            printf("Other event id:%d\n", event->event_id);
-        }
+        //printf("MQTT_EVENT_DATA\n");
+        //printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
+        //printf("DATA=%.*s\r\n", event->data_len, event->data);
         break;
 
     default:
@@ -67,7 +51,7 @@ esp_mqtt_client_handle_t mqtt_app_start(void)
     };
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     /* The last argument may be used to pass data to the event handler, in this example mqtt_event_handler */
-    esp_mqtt_client_register_event(client, MQTT_EVENT_ERROR, mqtt_event_handler, NULL);
+    //esp_mqtt_client_register_event(client, MQTT_EVENT_ERROR, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(client, MQTT_EVENT_DISCONNECTED, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(client, MQTT_EVENT_CONNECTED, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(client, MQTT_EVENT_DATA, mqtt_event_handler, NULL);
@@ -119,25 +103,26 @@ void send(void *args)
     {
         {
             //Publica a imagem no broker
-            msg_id = esp_mqtt_client_publish(client, "topic/img", (const char *)img_send.buf, img_send.len, 1, 0);
-            //esp_mqtt_client_enqueue() versão não bloqueante
+            esp_mqtt_client_enqueue(client, "topic/img", (const char *)img_send.buf, img_send.len, 1, 0, true); //versão não bloqueante
+            //msg_id = esp_mqtt_client_publish(client, "topic/img", (const char *)img_send.buf, img_send.len, 1, 0);
+            
         }
     }
   }
 }
 
 static void start_wifi(){
-  printf("Start WIFI: Running\n");
+  //printf("Start WIFI: Running\n");
   const char* ssid = "VIVOFIBRA-0E70";
   const char* password = "5246D8B9B9";
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
     vTaskDelay(pdMS_TO_TICKS(500));
-   Serial.print(".");
+   //Serial.print(".");
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
+  //Serial.println("");
+  //Serial.println("WiFi connected");
 }
 
 static void configure_pins(){
@@ -154,7 +139,9 @@ static void configure_pins(){
   //hook isr handler for specific gpio pin
   gpio_isr_handler_add(GPIO_INPUT, isr, (void*)GPIO_INPUT);
   //printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
-  gpio_intr_disable(GPIO_INPUT); 
+  gpio_intr_disable(GPIO_INPUT);
+  vTaskDelay(pdMS_TO_TICKS(5000));
+  gpio_intr_enable(GPIO_INPUT);
 }
 
 static void init_cam(){
@@ -181,21 +168,11 @@ static void init_cam(){
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
     config.grab_mode = CAMERA_GRAB_LATEST;
+    config.frame_size = FRAMESIZE_CIF;
+    config.fb_location = CAMERA_FB_IN_PSRAM;
+    config.jpeg_quality = 10;
+    config.fb_count = 2;
 
-    // if PSRAM IC present, init with UXGA resolution and higher JPEG quality
-    //                      for larger pre-allocated frame buffer.
- 
-    if(psramFound()){
-        //printf("PSRAM found\n");
-        config.frame_size = FRAMESIZE_SVGA; //FRAMESIZE_UXGA para maior resolução
-        config.jpeg_quality = 10;
-        config.fb_count = 2; // Modo de captura contínua
-    } else {
-        //printf("PSRAM not found\n");
-        config.frame_size = FRAMESIZE_SVGA;
-        config.jpeg_quality = 12;
-        config.fb_count = 1;
-    }
     // camera init
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
@@ -210,20 +187,20 @@ static void init_cam(){
       s->set_brightness(s, 1); // up the brightness just a bit
       s->set_saturation(s, -2); // lower the saturation
     }
-    s->set_framesize(s, FRAMESIZE_SVGA);
+    //s->set_framesize(s, FRAMESIZE_SVGA);
     //free(s) -> verificar se isto causava algum tipo de erro
 }
 
 void setup(void)
 {
-    Serial.begin(115200);
+    //Serial.begin(115200);
     init_cam(); // Inicializa a câmera
     start_wifi(); // Iicializa o WIFI
     configure_pins(); // Configura os pinos para interrupção de captura
     xSemaphore_capture = xSemaphoreCreateBinary();
     buffer = xQueueCreate(10, sizeof(img_data));//crea la cola *buffer* con 10 slots de 4 Bytes
-    xTaskCreatePinnedToCore(capture, "capture", 8192, NULL, 2, NULL, 0);
-    xTaskCreatePinnedToCore(send, "send", 8192, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(capture, "capture", 8192, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(send, "send", 8192, NULL, 2, NULL, 1);
 }
 
 void loop()

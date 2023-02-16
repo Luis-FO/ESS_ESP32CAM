@@ -3,7 +3,7 @@ import numpy as np
 import cv2
 from multiprocessing import Value
 import os
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 counter = Value('i', 0)
 
@@ -11,7 +11,7 @@ def save_img(img):
 	with counter.get_lock():
 		counter.value += 1
 		count = counter.value
-	img_dir = r"C:\Users\LuisF\Desktop\TCC\Sincronia_FreeRTOS"
+	img_dir = r"C:\Users\LuisF\Desktop\TCC\T5_HTTP_V1_segmentos_CIF_20mhz"
 	if not os.path.isdir(img_dir):
 		os.mkdir(img_dir)
 	cv2.imwrite(os.path.join(img_dir,"img_"+str(count)+".jpeg"), img)
@@ -21,7 +21,7 @@ app = Flask(__name__)
 
 # Rotea posts http para este método
 @app.route('/api/test', methods=['POST'])
-def server():
+def process_img():
     r = request
     # Converte a string da imagem para uint8
     nparr = np.frombuffer(r.data, np.uint8)
@@ -32,9 +32,9 @@ def server():
     # plt.show()
     save_img(img)
     # Armazena a média de intensidades da imagem recebida
-    mean = np.mean(img)
+    #mean = np.mean(img)
     # Insere a média em uma string
-    response = f'{mean}'
+    response = f'a'
     # Envia a resposta para o cliente
     return Response(response=response, status=200, mimetype="text/plain")
 

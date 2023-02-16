@@ -29,7 +29,7 @@ class IG():
         self.canvas.create_image(10, 10, anchor = NW, image=self.img)
 
     def run(self):
-        a = r"C:\Users\LuisF\Desktop\TCC\Sincronia_FreeRTOS_mqtt\img_34.jpeg"
+        a = r"C:\Users\LuisF\Desktop\6.png"
         self.img_box(a)
         self.W_Handle.mainloop()
         

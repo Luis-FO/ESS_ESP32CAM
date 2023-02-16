@@ -67,7 +67,7 @@ esp_mqtt_client_handle_t mqtt_app_start(void)
     };
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     /* The last argument may be used to pass data to the event handler, in this example mqtt_event_handler */
-    esp_mqtt_client_register_event(client, MQTT_EVENT_ERROR, mqtt_event_handler, NULL);
+    //esp_mqtt_client_register_event(client, MQTT_EVENT_ERROR, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(client, MQTT_EVENT_DISCONNECTED, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(client, MQTT_EVENT_CONNECTED, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(client, MQTT_EVENT_DATA, mqtt_event_handler, NULL);
@@ -100,7 +100,7 @@ void capture(void *paremeter)
         img.buf = (uint8_t *)malloc(fb->len); // Substituir malloc por sua versão mais adequada.
         memcpy(img.buf, fb->buf, fb->len);
         img.len = fb->len;
-        xQueueSend(buffer, &img, pdMS_TO_TICKS(0));
+        xQueueSendToFront(buffer, &img, pdMS_TO_TICKS(0));
         free(img.buf);
       }
       esp_camera_fb_return(fb);
