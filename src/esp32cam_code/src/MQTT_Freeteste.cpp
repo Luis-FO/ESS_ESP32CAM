@@ -107,6 +107,8 @@ void interpret_data(void *parameter)
           //Flip image
           vflip_enable = !vflip_enable;
           s->set_vflip(s, vflip_enable);
+          s->set_exposure_ctrl(s, 0);
+          s->set_aec_value(s, 168);
           //Free sensor pointer
           //free(s);
           
