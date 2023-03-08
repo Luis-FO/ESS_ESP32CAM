@@ -1,4 +1,5 @@
 #include "commom.h"
+#include "cJSON.h"
 
 #define GPIO_INPUT GPIO_NUM_14
 #define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT)
@@ -85,6 +86,11 @@ void interpret_data(void *parameter)
   size_t len;
 
   int vflip_enable = 0;
+  //////setings
+  cJSON *json = NULL;
+  int vflip;
+  int aec_value_exp;
+
   while(true)
   {
     if(xQueueReceive(cam_config_buffer, &data, portMAX_DELAY) == pdTRUE)
@@ -97,18 +103,18 @@ void interpret_data(void *parameter)
         //*********************Melhorar*********************
 
         if(strcmp(b, topic) == 0){
-          // If topic/cam_config
-          // Receive data and set the new config
-          // First I will test receive one just setting (vflip)
-          // and set this
-          printf("%s", b);
+          json = cJSON_ParseWithLength(data.data, strlen(data.data));
+          vflip = cJSON_GetObjectItemCaseSensitive(json, "vflip")->valueint;
+          aec_value_exp = cJSON_GetObjectItemCaseSensitive(json, "aec_value")->valueint;
+
+          printf("%i", aec_value_exp);
           //get sensor pointer
           sensor_t * s = esp_camera_sensor_get();
           //Flip image
-          vflip_enable = !vflip_enable;
-          s->set_vflip(s, vflip_enable);
+          //vflip_enable = !vflip_enable;
+          s->set_vflip(s, vflip);
           s->set_exposure_ctrl(s, 0);
-          s->set_aec_value(s, 168);
+          s->set_aec_value(s, aec_value_exp);
           //Free sensor pointer
           //free(s);
           
