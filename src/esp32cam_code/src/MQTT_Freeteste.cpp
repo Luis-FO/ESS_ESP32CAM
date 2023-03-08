@@ -37,8 +37,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
     case MQTT_EVENT_DATA:
         // printf("MQTT_EVENT_DATA\n");
-        printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-        printf("Tam=%i\n", event->topic_len);
+        //printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
+        //printf("Tam=%i\n", event->topic_len);
         // printf("DATA=%.*s\r\n", event->data_len, event->data);
         conf.topic = event->topic;
         conf.data = event->data;
@@ -83,6 +83,8 @@ void interpret_data(void *parameter)
   cam_config data = {};
   const char *topic = "topic/cam_config";
   size_t len;
+
+  int vflip_enable = 0;
   while(true)
   {
     if(xQueueReceive(cam_config_buffer, &data, portMAX_DELAY) == pdTRUE)
@@ -93,8 +95,21 @@ void interpret_data(void *parameter)
         strcpy(b, data.topic);
         b[len] = '\0';
         //*********************Melhorar*********************
+
         if(strcmp(b, topic) == 0){
+          // If topic/cam_config
+          // Receive data and set the new config
+          // First I will test receive one just setting (vflip)
+          // and set this
           printf("%s", b);
+          //get sensor pointer
+          sensor_t * s = esp_camera_sensor_get();
+          //Flip image
+          vflip_enable = !vflip_enable;
+          s->set_vflip(s, vflip_enable);
+          //Free sensor pointer
+          //free(s);
+          
         }
         else{
           xSemaphoreGive(xSemaphore_capture);
