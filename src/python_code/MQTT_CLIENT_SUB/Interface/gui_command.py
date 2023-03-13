@@ -62,13 +62,22 @@ class gui_ctrl:
         self.vflip_checkbt = ttk.Checkbutton(self.Frame_painel, text = 'vflip', variable = self.vflip_state, onvalue=1, offvalue=0)
         self.vflip_checkbt.grid()
         
-        # Barra deslizante para configuração da exposição
+        # Exposure value
         self.label_exposure = ttk.Label(self.Frame_painel, text = "Exposição(Tempo?)")
         self.label_exposure.grid()
 
         self.aec_value = IntVar()
         self.exposure_value_slider = ttk.Scale(self.Frame_painel, variable = self.aec_value ,from_= 0, to = 1200, orient = HORIZONTAL)
         self.exposure_value_slider.grid()
+
+        # Brilho
+        self.label_brightness = ttk.Label(self.Frame_painel, text = "Brilho")
+        self.label_brightness.grid()
+        
+        self.brightness = IntVar()
+        self.brightness_slider = ttk.Scale(self.Frame_painel, variable = self.brightness ,from_= -2, to = 2, orient = HORIZONTAL)
+        self.brightness_slider.grid()
+
 
         ################################# Botões #####################################
         # Botão para Envio de Configurações 
@@ -102,7 +111,7 @@ class gui_ctrl:
         self.cam_conf.vflip = int(self.vflip_state.get())
         self.cam_conf._aec_value = int(self.aec_value.get())
         self.cam_conf._exposure_ctrl = 0
-
+        self.cam_conf._brightness = int(self.brightness.get())
 
     def display_image(self, new_image):
 
