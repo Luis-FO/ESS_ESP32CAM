@@ -85,12 +85,13 @@ void interpret_data(void *parameter)
   const char *topic = "topic/cam_config";
   size_t len;
 
-  int vflip_enable = 0;
   //////setings
   cJSON *json = NULL;
   int vflip;
   int aec_value_exp;
+  int agc_gain;
 
+  framesize_t framesize;
   while(true)
   {
     if(xQueueReceive(cam_config_buffer, &data, portMAX_DELAY) == pdTRUE)
@@ -106,36 +107,24 @@ void interpret_data(void *parameter)
           json = cJSON_ParseWithLength(data.data, strlen(data.data));
           vflip = cJSON_GetObjectItemCaseSensitive(json, "vflip")->valueint;
           aec_value_exp = cJSON_GetObjectItemCaseSensitive(json, "aec_value")->valueint;
-
+          agc_gain = cJSON_GetObjectItemCaseSensitive(json, "agc_gain")->valueint;
+          framesize = framesize_t(cJSON_GetObjectItemCaseSensitive(json, "framesize")->valueint);
           printf("%i", aec_value_exp);
           //get sensor pointer
           sensor_t * s = esp_camera_sensor_get();
           //Flip image
-          //vflip_enable = !vflip_enable;
           s->set_vflip(s, vflip);
           s->set_exposure_ctrl(s, 0);
           s->set_aec_value(s, aec_value_exp);
-          //Free sensor pointer
-          //free(s);
+          s->set_framesize(s, framesize);
+          s->set_gain_ctrl(s, 0);
+          s->set_agc_gain(s, agc_gain);
           
         }
         else{
           xSemaphoreGive(xSemaphore_capture);
         }
         
-        // desliga a câmera temporariamente
-        //gpio_intr_disable(GPIO_INPUT);
-        
-        //Le a string
-        //byteArraySize = strlen(data);
-        //deserializeJson(doc, data, byteArraySize);
-
-        //Configura
-        //sensor_t *s = esp_camera_sensor_get();
-        //s->set_vflip(s, int(doc["vflip"])); // flip it back
-        //free(s);
-        
-        //gpio_intr_enable(GPIO_INPUT);
     }
   }
 }
@@ -249,24 +238,86 @@ static void init_cam(){
     // camera init
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
-        //Serial.println("Camera init failed with error 0x%x", err);
         return;
     }
 
-    sensor_t * s = esp_camera_sensor_get();
-    // initial sensors are flipped vertically and colors are a bit saturated
-    if (s->id.PID == OV3660_PID) {
-      s->set_vflip(s, 1); // flip it back
-      s->set_brightness(s, 1); // up the brightness just a bit
-      s->set_saturation(s, -2); // lower the saturation
+}
+
+typedef struct MQTT_Interface_suporte
+{
+  int index;
+  int value;
+}EntradaSerial;
+
+void read_param(){
+  Serial.begin(115200);
+  char sep = '-';
+  EntradaSerial values[3];
+
+  EntradaSerial aec_value;
+  EntradaSerial agc_gain;
+  EntradaSerial framesize;
+
+  String input;
+  int start = 0, end;
+  
+  while(true){
+    
+    if (Serial.available() > 0) {
+      input = Serial.readString();
+
+      values[0].index = input.indexOf("-");
+      values[1].index = input.indexOf("-", values[0].index+1);
+
+      values[0].value = input.substring(0, values[0].index).toInt();
+      values[1].value = input.substring(values[0].index+1, values[1].index).toInt(); 
+      values[2].value = input.substring(values[1].index+1).toInt();
+
+    for(int i = 0; i<3; i++){
+      Serial.println(values[i].value);
     }
-    //s->set_framesize(s, FRAMESIZE_SVGA);
-    //free(s) -> verificar se isto causava algum tipo de erro
+      
+      // Serial.end();
+      // return values[]
+    }
+  }
+  
+
+}
+
+
+
+void SerialRead(){
+  Serial.begin(115200);
+  char sep = '-';
+  EntradaSerial config_cam[3];
+
+  EntradaSerial aec_value;
+  EntradaSerial agc_gain;
+  EntradaSerial framesize;
+
+  String input;
+
+  while(true){
+    
+    if (Serial.available() > 0) {
+      input = Serial.readString();
+      aec_value.index = input.indexOf("-");
+      agc_gain.index = input.indexOf("-", aec_value.index+1);
+
+      aec_value.value = input.substring(0, aec_value.index).toInt();
+      agc_gain.value = input.substring(aec_value.index+1, agc_gain.index).toInt(); 
+      framesize.value = input.substring(agc_gain.index+1).toInt();
+
+      Serial.end();
+    }
+  }
 }
 
 void setup(void)
 {
     //Serial.begin(115200);
+    read_param();
     init_cam(); // Inicializa a câmera
     start_wifi(); // Iicializa o WIFI
     configure_pins(); // Configura os pinos para interrupção de captura
@@ -275,10 +326,11 @@ void setup(void)
 
     cam_config_buffer = xQueueCreate(2, sizeof(cam_config));
     
-    xTaskCreatePinnedToCore(capture, "capture", 8192, NULL, 1, NULL, 0);
-    xTaskCreatePinnedToCore(send, "send", 8192, NULL, 2, NULL, 1);
 
-    xTaskCreatePinnedToCore(interpret_data, "interpret_data", 8192, NULL, 2, NULL, 1);
+    // xTaskCreatePinnedToCore(interpret_data, "interpret_data", 8192, NULL, 2, NULL, 1);
+    xTaskCreate(capture, "capture", 8192, NULL, 4, NULL); // Maior prioridade
+    xTaskCreate(send, "send", 8192, NULL, 2, NULL);
+    xTaskCreate(interpret_data, "interpret_data", 8192, NULL, 2, NULL);
 }
 
 void loop()
