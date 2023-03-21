@@ -206,7 +206,7 @@ static void configure_pins(){
   gpio_intr_enable(GPIO_INPUT);
 }
 
-static void init_cam(){
+static void init_cam(int aec_value, int agc_gain, framesize_t framesize){
     //printf("Cam Init: Running\n");
     camera_config_t config;
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -230,7 +230,7 @@ static void init_cam(){
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
     config.grab_mode = CAMERA_GRAB_LATEST;
-    config.frame_size = FRAMESIZE_CIF;
+    config.frame_size = framesize;
     config.fb_location = CAMERA_FB_IN_PSRAM;
     config.jpeg_quality = 10;
     config.fb_count = 2;
@@ -240,29 +240,26 @@ static void init_cam(){
     if (err != ESP_OK) {
         return;
     }
+    
+
+    sensor_t * s = esp_camera_sensor_get();
+
+    s->set_exposure_ctrl(s, 0);
+    s->set_aec_value(s, aec_value);
+    
+    //s->set_framesize(s, framesize);
+
+    
+    s->set_gain_ctrl(s, 0);
+    s->set_agc_gain(s, agc_gain);
 
 }
 
-typedef struct MQTT_Interface_suporte
-{
-  int index;
-  int value;
-}EntradaSerial;
-
-void read_param(){
-  Serial.begin(115200);
-  char sep = '-';
-  EntradaSerial values[3];
-
-  EntradaSerial aec_value;
-  EntradaSerial agc_gain;
-  EntradaSerial framesize;
-
-  String input;
-  int start = 0, end;
+int SerialRead(Indexed_Data *values){
   
+  Serial.begin(115200);
+  String input;
   while(true){
-    
     if (Serial.available() > 0) {
       input = Serial.readString();
 
@@ -272,61 +269,40 @@ void read_param(){
       values[0].value = input.substring(0, values[0].index).toInt();
       values[1].value = input.substring(values[0].index+1, values[1].index).toInt(); 
       values[2].value = input.substring(values[1].index+1).toInt();
-
-    for(int i = 0; i<3; i++){
-      Serial.println(values[i].value);
-    }
       
-      // Serial.end();
-      // return values[]
-    }
-  }
-  
-
-}
-
-
-
-void SerialRead(){
-  Serial.begin(115200);
-  char sep = '-';
-  EntradaSerial config_cam[3];
-
-  EntradaSerial aec_value;
-  EntradaSerial agc_gain;
-  EntradaSerial framesize;
-
-  String input;
-
-  while(true){
-    
-    if (Serial.available() > 0) {
-      input = Serial.readString();
-      aec_value.index = input.indexOf("-");
-      agc_gain.index = input.indexOf("-", aec_value.index+1);
-
-      aec_value.value = input.substring(0, aec_value.index).toInt();
-      agc_gain.value = input.substring(aec_value.index+1, agc_gain.index).toInt(); 
-      framesize.value = input.substring(agc_gain.index+1).toInt();
-
+      Serial.println(values[0].value);
+      Serial.println(values[1].value);
+      Serial.println(values[2].value);
+      //Encerra a serial ao final da leitura
+      Serial.flush();
       Serial.end();
+      return 1;
+      
     }
   }
+  // Encerra a Serial em caso de eventual falha
+  Serial.end();
+  return -1;
+
 }
 
 void setup(void)
 {
-    //Serial.begin(115200);
-    read_param();
-    init_cam(); // Inicializa a câmera
+    // Serial.begin(115200);
+    Indexed_Data c_settings[3];
+    SerialRead(c_settings);
+    // Pos: 
+    // 0 -> aec_value ; 1 -> agc_gain; 2 -> framesize.
+
+    init_cam(c_settings[0].value, c_settings[1].value, (framesize_t)c_settings[2].value); // Inicializa a câmera
     start_wifi(); // Iicializa o WIFI
     configure_pins(); // Configura os pinos para interrupção de captura
+
     xSemaphore_capture = xSemaphoreCreateBinary();
     buffer = xQueueCreate(10, sizeof(img_data));//crea la cola *buffer* con 10 slots de 4 Bytes
 
     cam_config_buffer = xQueueCreate(2, sizeof(cam_config));
     
-
     // xTaskCreatePinnedToCore(interpret_data, "interpret_data", 8192, NULL, 2, NULL, 1);
     xTaskCreate(capture, "capture", 8192, NULL, 4, NULL); // Maior prioridade
     xTaskCreate(send, "send", 8192, NULL, 2, NULL);

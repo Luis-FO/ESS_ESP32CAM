@@ -78,6 +78,12 @@ typedef struct {
   size_t len;              
 }img_data;
 
+typedef struct
+{
+  int index;
+  int value;
+}Indexed_Data;
+
 static void log_error_if_nonzero(const char *message, int error_code);
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 esp_mqtt_client_handle_t mqtt_app_start(void);
@@ -86,7 +92,7 @@ void capture(void *args);
 void send(void *args);
 static void start_wifi();
 static void configure_pins();
-static void init_cam();
+static void init_cam(int aec_value, int agc_gain, framesize_t framesize);
 void interpret_data(void *args);
 
 
