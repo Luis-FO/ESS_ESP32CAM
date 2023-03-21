@@ -6,35 +6,6 @@ import numpy as np
 import cv2
 from ov2640_settings import Camera_Settings
 
-# set_exposure_ctrl()
-# set_aec_value()
-# sensor_t * s = esp_camera_sensor_get()
-
-# s->set_brightness(s, 0);     // -2 to 2
-# s->set_contrast(s, 0);       // -2 to 2
-# s->set_saturation(s, 0);     // -2 to 2
-# s->set_special_effect(s, 0); // 0 to 6 (0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint, 4 - Green Tint, 5 - Blue Tint, 6 - Sepia)
-# s->set_whitebal(s, 1);       // 0 = disable , 1 = enable
-# s->set_awb_gain(s, 1);       // 0 = disable , 1 = enable
-# s->set_wb_mode(s, 0);        // 0 to 4 - if awb_gain enabled (0 - Auto, 1 - Sunny, 2 - Cloudy, 3 - Office, 4 - Home)
-# s->set_exposure_ctrl(s, 1);  // 0 = disable , 1 = enable
-# s->set_aec2(s, 0);           // 0 = disable , 1 = enable
-# s->set_ae_level(s, 0);       // -2 to 2
-# s->set_aec_value(s, 300);    // 0 to 1200
-# s->set_gain_ctrl(s, 1);      // 0 = disable , 1 = enable
-# s->set_agc_gain(s, 0);       // 0 to 30
-# s->set_gainceiling(s, (gainceiling_t)0);  // 0 to 6
-# s->set_bpc(s, 0);            // 0 = disable , 1 = enable
-# s->set_wpc(s, 1);            // 0 = disable , 1 = enable
-# s->set_raw_gma(s, 1);        // 0 = disable , 1 = enable
-# s->set_lenc(s, 1);           // 0 = disable , 1 = enable
-# s->set_hmirror(s, 0);        // 0 = disable , 1 = enable
-# s->set_vflip(s, 0);          // 0 = disable , 1 = enable
-# s->set_dcw(s, 1);            // 0 = disable , 1 = enable
-# s->set_colorbar(s, 0);       // 0 = disable , 1 = enable
-
-#convert array to PiL Image    
-
 
 class gui_ctrl:
 
@@ -71,13 +42,19 @@ class gui_ctrl:
         self.exposure_value_slider.grid()
 
         # Brilho
-        self.label_brightness = ttk.Label(self.Frame_painel, text = "Brilho")
-        self.label_brightness.grid()
+        self.label_gain = ttk.Label(self.Frame_painel, text = "Ganho")
+        self.label_gain.grid()
         
-        self.brightness = IntVar()
-        self.brightness_slider = ttk.Scale(self.Frame_painel, variable = self.brightness ,from_= -2, to = 2, orient = HORIZONTAL)
-        self.brightness_slider.grid()
+        #Ganho
+        self.gain = IntVar()
+        self.gain_slider = ttk.Scale(self.Frame_painel, variable = self.gain ,from_= 0, to = 30, orient = HORIZONTAL)
+        self.gain_slider.grid()
 
+        # Framesize
+        self._combobox = ttk.Combobox(self.Frame_painel)
+        self._combobox['values'] = list(Camera_Settings.frame_sizes.keys())
+        self._combobox.current(self.cam_conf.framesize)
+        self._combobox.grid()
 
         ################################# Botões #####################################
         # Botão para Envio de Configurações 
@@ -98,7 +75,7 @@ class gui_ctrl:
         self.Frame_image.grid(row = 0, column = 1)
         
         # Cria uma label com texto e posicionada dentro do frame "frm"
-        self.image = ImageTk.PhotoImage(Image.open(r"src\python_code\MQTT_CLIENT_SUB\Imagens\g1.jpg"))  
+        self.image = ImageTk.PhotoImage(Image.open(r"src\python_code\MQTT_CLIENT_SUB\Imagens\florianopolis_horizontal_marca2015_PNG.png"))  
 
         self.label_image = Label(self.Frame_image, image = self.image)
         self.label_image.grid(column=0, row=0)
@@ -108,10 +85,12 @@ class gui_ctrl:
         self.publica("topic/cam_config",self.cam_conf.to_json())
 
     def read_form(self):
-        self.cam_conf.vflip = int(self.vflip_state.get())
+        self.cam_conf._vflip = int(self.vflip_state.get())
         self.cam_conf._aec_value = int(self.aec_value.get())
         self.cam_conf._exposure_ctrl = 0
-        self.cam_conf._brightness = int(self.brightness.get())
+        self.cam_conf._agc_gain = int(self.gain.get())
+        self.cam_conf.framesize = self._combobox.get()
+        print(self.cam_conf)
 
     def display_image(self, new_image):
 

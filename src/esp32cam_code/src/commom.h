@@ -1,29 +1,19 @@
-#include <Arduino.h>
+#include "esp_camera.h"
 #include <WiFi.h>
 
-#include <stdio.h>
-#include <stdint.h>
-#include <stddef.h>
 #include <string.h>
-#include "esp_wifi.h"
+#include <stdlib.h>
+
+#include "esp_log.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
-#include "esp_netif.h"
+#include "esp_tls.h"
+#include "esp_http_client.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semphr.h"
 #include "freertos/queue.h"
-
-#include "lwip/sockets.h"
-#include "lwip/dns.h"
-#include "lwip/netdb.h"
-
-#include "esp_log.h"
-#include "mqtt_client.h"
-
-#include "esp_camera.h"
 #include "driver/gpio.h"
 
 #define CAMERA_MODEL_AI_THINKER
@@ -68,32 +58,23 @@
 
 #endif
 
-typedef struct {
-  char *data;         
-  char *topic;           
-}cam_config;
-
-typedef struct {
-  uint8_t *buf;          
-  size_t len;              
-}img_data;
-
 typedef struct
 {
   int index;
   int value;
 }Indexed_Data;
 
-static void log_error_if_nonzero(const char *message, int error_code);
-static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
-esp_mqtt_client_handle_t mqtt_app_start(void);
-static void IRAM_ATTR isr(void* args);
-void capture(void *args);
-void send(void *args);
-static void start_wifi();
-static void configure_pins();
+typedef struct {
+  uint8_t *buf;          
+  size_t len;              
+}img_data;
+
+
+int SerialRead(Indexed_Data *values);
 static void init_cam(int aec_value, int agc_gain, framesize_t framesize);
-void interpret_data(void *args);
-
-
+void start_wifi();
+void capture(void *paremeter);
+void send(void *parameter);
+void configure_pins();
+static void IRAM_ATTR isr(void* arg);
 
