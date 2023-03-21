@@ -1,15 +1,15 @@
-#include <string.h>
-#include <stdlib.h>
-#include "esp_http_client.h"
-
 #include "esp_camera.h"
 #include <WiFi.h>
+
+#include <string.h>
+#include <stdlib.h>
 
 #include "esp_log.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_tls.h"
+#include "esp_http_client.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -68,6 +68,7 @@ typedef struct {
   uint8_t *buf;          
   size_t len;              
 }img_data;
+
 
 int SerialRead(Indexed_Data *values);
 static void init_cam(int aec_value, int agc_gain, framesize_t framesize);
