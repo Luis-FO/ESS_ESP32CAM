@@ -34,7 +34,7 @@ def process_img():
     # Armazena a média de intensidades da imagem recebida
     #mean = np.mean(img)
     # Insere a média em uma string
-    response = f'a'
+    response = f'Ok'
     # Envia a resposta para o cliente
     return Response(response=response, status=200, mimetype="text/plain")
 

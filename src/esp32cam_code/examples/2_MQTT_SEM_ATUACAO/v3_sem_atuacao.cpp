@@ -7,7 +7,6 @@
 
 SemaphoreHandle_t xSemaphore_capture;
 QueueHandle_t buffer;
-QueueHandle_t cam_config_buffer;
 
 esp_mqtt_client_handle_t mqtt_app_start(void)
 {
@@ -202,7 +201,6 @@ void setup(void)
     xSemaphore_capture = xSemaphoreCreateBinary();
     buffer = xQueueCreate(10, sizeof(img_data));//crea la cola *buffer* con 10 slots de 4 Bytes
 
-    cam_config_buffer = xQueueCreate(2, sizeof(cam_config));
     
     // xTaskCreatePinnedToCore(interpret_data, "interpret_data", 8192, NULL, 2, NULL, 1);
     xTaskCreate(capture, "capture", 8192, NULL, 4, NULL); // Maior prioridade

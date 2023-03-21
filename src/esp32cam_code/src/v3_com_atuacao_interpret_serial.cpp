@@ -5,9 +5,14 @@
 #define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT)
 #define ESP_INTR_FLAG_DEFAULT 0 // Verificar necessidade
 
+#define GPIO_OUTPUT GPIO_NUM_33
+#define GPIO_OUTPUT_PIN_SEL  (1ULL<<GPIO_OUTPUT)
+
 SemaphoreHandle_t xSemaphore_capture;
 QueueHandle_t buffer;
 QueueHandle_t cam_config_buffer;
+
+QueueHandle_t resp_buffer;
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -22,6 +27,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     case MQTT_EVENT_CONNECTED:
         //printf("MQTT_EVENT_CONNECTED\n");
         //msg_id = esp_mqtt_client_subscribe(client, "topic/resp", 1);
+        esp_mqtt_client_subscribe(client, "topic/resp", 1);
         esp_mqtt_client_subscribe(client, "topic/get_image", 1);
         esp_mqtt_client_subscribe(client, "topic/cam_config", 1);
         //printf("sent subscribe successful, msg_id=%d\n", msg_id);
@@ -31,6 +37,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     case MQTT_EVENT_DISCONNECTED:
         //printf("MQTT_EVENT_DISCONNECTED\n");
         //msg_id = esp_mqtt_client_unsubscribe(client, "topic/resp");
+        esp_mqtt_client_unsubscribe(client, "topic/resp");
         esp_mqtt_client_unsubscribe(client, "topic/get_image");
         esp_mqtt_client_unsubscribe(client, "topic/cam_config");
         //gpio_intr_disable(GPIO_INPUT);
@@ -82,7 +89,9 @@ static void IRAM_ATTR isr(void* arg){
 void interpret_data(void *parameter)
 {
   cam_config data = {};
-  const char *topic = "topic/cam_config";
+  const char *topic_cam = "topic/cam_config";
+  const char *topic_resp = "topic/resp";
+
   size_t len;
 
   //////setings
@@ -101,15 +110,16 @@ void interpret_data(void *parameter)
         char b[len+1];
         strcpy(b, data.topic);
         b[len] = '\0';
+        //printf(b);
         //*********************Melhorar*********************
 
-        if(strcmp(b, topic) == 0){
+        if(strcmp(b, topic_cam) == 0){
           json = cJSON_ParseWithLength(data.data, strlen(data.data));
           vflip = cJSON_GetObjectItemCaseSensitive(json, "vflip")->valueint;
           aec_value_exp = cJSON_GetObjectItemCaseSensitive(json, "aec_value")->valueint;
           agc_gain = cJSON_GetObjectItemCaseSensitive(json, "agc_gain")->valueint;
           framesize = framesize_t(cJSON_GetObjectItemCaseSensitive(json, "framesize")->valueint);
-          printf("%i", aec_value_exp);
+          //printf("%i", aec_value_exp);
           //get sensor pointer
           sensor_t * s = esp_camera_sensor_get();
           //Flip image
@@ -120,6 +130,10 @@ void interpret_data(void *parameter)
           s->set_gain_ctrl(s, 0);
           s->set_agc_gain(s, agc_gain);
           
+        }
+        else if(strcmp(b, topic_resp) == 0){
+
+          xQueueSend(resp_buffer, &data.data, pdMS_TO_TICKS(0));
         }
         else{
           xSemaphoreGive(xSemaphore_capture);
@@ -187,6 +201,19 @@ static void start_wifi(){
   //Serial.println("WiFi connected");
 }
 
+void control(void *parameter){
+  char resp_data;
+  uint32_t level = 0;
+  while (true)
+  {
+    if(xQueueReceive(resp_buffer, &resp_data, portMAX_DELAY) == pdTRUE)
+    {
+      level = !level;
+      gpio_set_level(GPIO_OUTPUT, level);
+    }
+  }
+}
+
 static void configure_pins(){
   //printf("Pin configuration: Running\n");
   gpio_config_t io_conf = {};
@@ -195,6 +222,18 @@ static void configure_pins(){
   io_conf.mode = GPIO_MODE_INPUT;
   io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
   io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+  gpio_config(&io_conf);
+
+  //Led
+  ////////////////////////////
+  io_conf.intr_type = GPIO_INTR_DISABLE;
+  io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;
+  io_conf.mode = GPIO_MODE_OUTPUT;
+  io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+  io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+
+  ///////////////////////////
+
   gpio_config(&io_conf);
   //install gpio isr service
   gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT); //A proxima linhas dispensa essa
@@ -206,6 +245,7 @@ static void configure_pins(){
   gpio_intr_enable(GPIO_INPUT);
 }
 
+//static void init_cam(int aec_value, int agc_gain, framesize_t framesize)
 static void init_cam(int aec_value, int agc_gain, framesize_t framesize){
     //printf("Cam Init: Running\n");
     camera_config_t config;
@@ -230,7 +270,7 @@ static void init_cam(int aec_value, int agc_gain, framesize_t framesize){
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
     config.grab_mode = CAMERA_GRAB_LATEST;
-    config.frame_size = framesize;
+    config.frame_size = FRAMESIZE_CIF;//framesize;
     config.fb_location = CAMERA_FB_IN_PSRAM;
     config.jpeg_quality = 10;
     config.fb_count = 2;
@@ -242,16 +282,16 @@ static void init_cam(int aec_value, int agc_gain, framesize_t framesize){
     }
     
 
-    sensor_t * s = esp_camera_sensor_get();
+    // sensor_t * s = esp_camera_sensor_get();
 
-    s->set_exposure_ctrl(s, 0);
-    s->set_aec_value(s, aec_value);
+    // s->set_exposure_ctrl(s, 0);
+    // s->set_aec_value(s, aec_value);
     
-    //s->set_framesize(s, framesize);
+    // //s->set_framesize(s, framesize);
 
     
-    s->set_gain_ctrl(s, 0);
-    s->set_agc_gain(s, agc_gain);
+    // s->set_gain_ctrl(s, 0);
+    // s->set_agc_gain(s, agc_gain);
 
 }
 
@@ -295,17 +335,21 @@ void setup(void)
     // 0 -> aec_value ; 1 -> agc_gain; 2 -> framesize.
 
     init_cam(c_settings[0].value, c_settings[1].value, (framesize_t)c_settings[2].value); // Inicializa a câmera
+    //init_cam();
     start_wifi(); // Iicializa o WIFI
     configure_pins(); // Configura os pinos para interrupção de captura
 
     xSemaphore_capture = xSemaphoreCreateBinary();
     buffer = xQueueCreate(10, sizeof(img_data));//crea la cola *buffer* con 10 slots de 4 Bytes
 
+    resp_buffer = xQueueCreate(10, sizeof(char));
     cam_config_buffer = xQueueCreate(2, sizeof(cam_config));
     
     // xTaskCreatePinnedToCore(interpret_data, "interpret_data", 8192, NULL, 2, NULL, 1);
     xTaskCreate(capture, "capture", 8192, NULL, 4, NULL); // Maior prioridade
     xTaskCreate(send, "send", 8192, NULL, 2, NULL);
+
+    xTaskCreate(control, "control", 8192, NULL, 2, NULL);
     xTaskCreate(interpret_data, "interpret_data", 8192, NULL, 2, NULL);
 }
 

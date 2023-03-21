@@ -11,7 +11,7 @@ def save_img(img):
 	with counter.get_lock():
 		counter.value += 1
 		count = counter.value
-	img_dir = r"C:\Users\LuisF\Desktop\TCC\T5_HTTP_V1_segmentos_CIF_20mhz"
+	img_dir = r"src\python_code\HTTP_API_FLASK\api_salva_processa\imagens"
 	if not os.path.isdir(img_dir):
 		os.mkdir(img_dir)
 	cv2.imwrite(os.path.join(img_dir,"img_"+str(count)+".jpeg"), img)
@@ -32,9 +32,9 @@ def process_img():
     # plt.show()
     save_img(img)
     # Armazena a média de intensidades da imagem recebida
-    #mean = np.mean(img)
+    mean = np.mean(img)
     # Insere a média em uma string
-    response = f'a'
+    response = f'{mean}'
     # Envia a resposta para o cliente
     return Response(response=response, status=200, mimetype="text/plain")
 
