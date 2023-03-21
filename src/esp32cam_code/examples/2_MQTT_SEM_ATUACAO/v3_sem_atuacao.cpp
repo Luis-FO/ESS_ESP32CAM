@@ -31,7 +31,6 @@ static void IRAM_ATTR isr(void* arg){
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-
 void capture(void *paremeter)
 {
   camera_fb_t *fb = NULL;

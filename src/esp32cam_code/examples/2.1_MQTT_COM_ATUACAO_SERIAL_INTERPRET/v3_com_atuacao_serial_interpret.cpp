@@ -270,7 +270,7 @@ static void init_cam(int aec_value, int agc_gain, framesize_t framesize){
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
     config.grab_mode = CAMERA_GRAB_LATEST;
-    config.frame_size = FRAMESIZE_CIF;//framesize;
+    config.frame_size = framesize;
     config.fb_location = CAMERA_FB_IN_PSRAM;
     config.jpeg_quality = 10;
     config.fb_count = 2;
@@ -282,16 +282,16 @@ static void init_cam(int aec_value, int agc_gain, framesize_t framesize){
     }
     
 
-    // sensor_t * s = esp_camera_sensor_get();
+    sensor_t * s = esp_camera_sensor_get();
 
-    // s->set_exposure_ctrl(s, 0);
-    // s->set_aec_value(s, aec_value);
+    s->set_exposure_ctrl(s, 0);
+    s->set_aec_value(s, aec_value);
     
-    // //s->set_framesize(s, framesize);
+    //s->set_framesize(s, framesize);
 
     
-    // s->set_gain_ctrl(s, 0);
-    // s->set_agc_gain(s, agc_gain);
+    s->set_gain_ctrl(s, 0);
+    s->set_agc_gain(s, agc_gain);
 
 }
 

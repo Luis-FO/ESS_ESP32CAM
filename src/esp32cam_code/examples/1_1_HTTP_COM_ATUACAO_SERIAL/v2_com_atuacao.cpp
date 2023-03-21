@@ -85,7 +85,7 @@ static void init_cam(int aec_value, int agc_gain, framesize_t framesize){
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
     config.grab_mode = CAMERA_GRAB_LATEST;
-    config.frame_size = framesize;FRAMESIZE_CIF; //FRAMESIZE_UXGA;
+    config.frame_size = framesize; //FRAMESIZE_CIF; //FRAMESIZE_UXGA;
     config.jpeg_quality = 10;
     config.fb_count = 2;
     config.fb_location = CAMERA_FB_IN_PSRAM;
