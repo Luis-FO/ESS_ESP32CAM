@@ -11,7 +11,7 @@ def save_img(img):
 	with counter.get_lock():
 		counter.value += 1
 		count = counter.value
-	img_dir = r"src\python_code\HTTP_API_FLASK\api_salva_processa\imagens"
+	img_dir = r"C:\Users\luisf\Documents\IMAGENS"
 	if not os.path.isdir(img_dir):
 		os.mkdir(img_dir)
 	cv2.imwrite(os.path.join(img_dir,"img_"+str(count)+".jpeg"), img)
